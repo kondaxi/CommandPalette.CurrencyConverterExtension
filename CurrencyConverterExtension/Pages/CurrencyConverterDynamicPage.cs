@@ -1,4 +1,5 @@
-﻿using Kondaxi.CommandPalette.CurrencyConverterExtension.Domain;
+﻿using Kondaxi.CommandPalette.CurrencyConverterExtension.Assets;
+using Kondaxi.CommandPalette.CurrencyConverterExtension.Domain;
 using Kondaxi.CommandPalette.CurrencyConverterExtension.Domain.ExchangeRateProviders;
 using Kondaxi.CommandPalette.CurrencyConverterExtension.Models;
 using Microsoft.CommandPalette.Extensions;
@@ -10,27 +11,37 @@ namespace Kondaxi.CommandPalette.CurrencyConverterExtension.Pages;
 internal sealed partial class CurrencyConverterPage : DynamicListPage
 {
     private static Regex _pattern = CurrencyConverterPattern();
+    private static IconInfo _icon = new IconInfo(UiResources.MainIcon);
 
-    private static ListItem _defaultItem = new(new NoOpCommand())
+    private static ListItem _emptyResultItem = new(new NoOpCommand())
     {
         Subtitle = "Pattern: {Amount} {SourceCurrency} to {DestinationCurrency}",
-        Icon = new IconInfo("\ue8ee")
+        Icon = _icon
     };
+
+    private static ListItem _dataNotAvailableResultItem = new(new NoOpCommand())
+    {
+        Title = "Data for the given currencies is not available.",
+        Icon = _icon
+    };
+
+    private ListItem _resultItem = _emptyResultItem;
 
     public CurrencyConverterPage()
     {
         Name = "Currency Converter";
-        Icon = new IconInfo("\ue8ee");
+        Icon = _icon;
     }
 
-    public override void UpdateSearchText(string oldSearch, string newSearch) => RaiseItemsChanged();
+    public override void UpdateSearchText(string oldSearch, string newSearch) => SetConversionResult();
 
-    public override IListItem[] GetItems()
+    public override IListItem[] GetItems() => [_resultItem];
+
+    private async void SetConversionResult()
     {
         CurrencyConverterData? data = GetCurrencyConverterData();
 
-        ListItem result;
-
+        ListItem updatedItem;
         if (data is not null)
         {
             IsLoading = true;
@@ -38,18 +49,19 @@ internal sealed partial class CurrencyConverterPage : DynamicListPage
             try
             {
                 ExchangeRateService fxService = new(new EcbExchangeRateProvider());
-                decimal? convertedAmount = fxService.Convert(data).Result;
+                ExchangeConversionResult? conversionResult = await fxService.Convert(data);
 
-                if (convertedAmount is null)
+                if (conversionResult is null)
                 {
-                    result = _defaultItem;
+                    updatedItem = _dataNotAvailableResultItem;
                 }
                 else
                 {
-                    result = new(new NoOpCommand())
+                    updatedItem = new(new NoOpCommand())
                     {
-                        Title = $"{convertedAmount:N4} {data.DestinationCurrency.ToUpper(CultureInfo.CurrentCulture)}",
-                        Icon = _defaultItem.Icon
+                        Title = $"{conversionResult.Value:N4} {data.DestinationCurrency.ToUpper(CultureInfo.CurrentCulture)}",
+                        Subtitle = $"Data from {conversionResult.Source}. Last updated on {conversionResult.LastUpdateTime}",
+                        Icon = _icon
                     };
                 }
             }
@@ -60,10 +72,14 @@ internal sealed partial class CurrencyConverterPage : DynamicListPage
         }
         else
         {
-            result = _defaultItem;
+            updatedItem = _emptyResultItem;
         }
 
-        return [result];
+        if (_resultItem != updatedItem)
+        {
+            _resultItem = updatedItem;
+            RaiseItemsChanged();
+        }
     }
 
     [GeneratedRegex(@"^\s*(\d+(?:.\d+)?)[\s]+(\w{3})\s+(?:to\s+)?(\w{3})\s*$", RegexOptions.IgnoreCase)]

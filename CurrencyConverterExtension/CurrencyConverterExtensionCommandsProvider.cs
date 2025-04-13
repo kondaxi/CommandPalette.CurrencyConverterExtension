@@ -1,3 +1,4 @@
+using Kondaxi.CommandPalette.CurrencyConverterExtension.Assets;
 using Kondaxi.CommandPalette.CurrencyConverterExtension.Pages;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
@@ -11,7 +12,7 @@ public partial class CurrencyConverterExtensionCommandsProvider : CommandProvide
     public CurrencyConverterExtensionCommandsProvider()
     {
         DisplayName = "Currency Converter";
-        Icon = new IconInfo("\ue8ee");
+        Icon = new IconInfo(UiResources.MainIcon);
         _commands = [
             new CommandItem(new CurrencyConverterPage()){ Title = "Currency Converter" }
         ];
@@ -21,5 +22,4 @@ public partial class CurrencyConverterExtensionCommandsProvider : CommandProvide
     {
         return _commands;
     }
-
 }

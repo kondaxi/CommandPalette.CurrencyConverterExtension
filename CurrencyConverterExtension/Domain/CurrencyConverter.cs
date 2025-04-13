@@ -6,11 +6,22 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace Kondaxi.CommandPalette.CurrencyConverterExtension.Domain;
-internal class CurrencyConverter
+internal sealed class CurrencyConverter
 {
-    private Dictionary<string, decimal> _ratesSearch;
+    private readonly Dictionary<string, decimal> _ratesSearch = [];
+    private readonly HashSet<string> _currencies = [];
+    private readonly string _baseCurrency = string.Empty;
     public CurrencyConverter(IEnumerable<ExchangeRate> rates)
     {
+        if (!rates.Any())
+        {
+            return;
+        }
+
+        _baseCurrency = rates.First().BaseCurrency;
+        _currencies = rates.Select(r => r.DestinationCurrency).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _currencies.Add(_baseCurrency);
+
         _ratesSearch = new(StringComparer.OrdinalIgnoreCase);
         foreach (var rate in rates)
         {
@@ -25,11 +36,34 @@ internal class CurrencyConverter
 
     public decimal? Convert(CurrencyConverterData data)
     {
-        string key = CreateKey(data.BaseCurrency, data.DestinationCurrency);
-
-        if(_ratesSearch.TryGetValue(key, out decimal rate))
+        // When converting from or to the base currency we need only one conversion
+        if (string.Equals(data.SourceCurrency, _baseCurrency, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(data.DestinationCurrency, _baseCurrency, StringComparison.OrdinalIgnoreCase))
         {
-            return data.Amount * rate;
+            string key = CreateKey(data.SourceCurrency, data.DestinationCurrency);
+
+            if (_ratesSearch.TryGetValue(key, out decimal rate))
+            {
+                return data.Amount * rate;
+            }
+        }
+        // When converting not from or to the base currency we first need to convert to the base currency,
+        // and then convert to the destination currency
+        else
+        {
+            string sourceToBaseKey = CreateKey(data.SourceCurrency, _baseCurrency);
+            if(!_ratesSearch.TryGetValue(sourceToBaseKey, out decimal sourceToBaseRate))
+            {
+                return null;
+            }
+
+            string baseToDestKey = CreateKey(_baseCurrency, data.DestinationCurrency);
+            if (!_ratesSearch.TryGetValue(baseToDestKey, out decimal baseToDestRate))
+            {
+                return null;
+            }
+
+            return data.Amount * sourceToBaseRate * baseToDestRate;
         }
 
         return null;

@@ -12,10 +12,18 @@ internal partial class ExchangeRateService
         _exchangeRateProvider = exchangeRateProvider;
     }
 
-    public async Task<decimal?> Convert(CurrencyConverterData currencyConverterData)
+    public async Task<ExchangeConversionResult?> Convert(CurrencyConverterData currencyConverterData)
     {
-        var rates = await _exchangeRateProvider.Get();
-        CurrencyConverter currencyConverter = new(rates);
-        return currencyConverter.Convert(currencyConverterData);
+        ExchangeRatesResult exResult = await _exchangeRateProvider.Get();
+        CurrencyConverter currencyConverter = new(exResult.ExchangeRates);
+        decimal? convertedAmount = currencyConverter.Convert(currencyConverterData);
+        if (convertedAmount is null)
+        {
+            return null;
+        }
+        else
+        {
+            return new ExchangeConversionResult(convertedAmount.Value, exResult.Source, exResult.LastUpdateTime);
+        }
     }
 }

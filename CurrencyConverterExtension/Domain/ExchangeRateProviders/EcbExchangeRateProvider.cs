@@ -12,7 +12,8 @@ internal partial class EcbExchangeRateProvider : IExchangeRateProvider
     private const string BaseCurrency = "EUR";
     private static readonly MemoryCache _cache;
 
-    private static TimeSpan CutoffTime = TimeSpan.FromHours(17);
+    private static TimeSpan _cutoffTime = TimeSpan.FromHours(17);
+    private const string Source = "European Central Bank";
 
     static EcbExchangeRateProvider()
     {
@@ -22,7 +23,7 @@ internal partial class EcbExchangeRateProvider : IExchangeRateProvider
         });
     }
 
-    public Task<IEnumerable<ExchangeRate>> Get()
+    public Task<ExchangeRatesResult> Get()
     {
         return _cache.GetOrCreateAsync("Rates", async cacheEntry =>
         {
@@ -30,7 +31,7 @@ internal partial class EcbExchangeRateProvider : IExchangeRateProvider
             cacheEntry.AbsoluteExpiration = GetCacheExpirationTime();
             string data = await LoadData();
             IEnumerable<ExchangeRate> rates = ParseData(data);
-            return rates;
+            return new ExchangeRatesResult(rates, Source, DateTimeOffset.Now);
         })!;
     }
 
@@ -41,7 +42,7 @@ internal partial class EcbExchangeRateProvider : IExchangeRateProvider
         DateTime ect = TimeZoneInfo.ConvertTimeFromUtc(utcTime, ectZone);
 
         DateTime baseDate;
-        if(ect.TimeOfDay < CutoffTime)
+        if (ect.TimeOfDay < _cutoffTime)
         {
             baseDate = ect;
         }
@@ -50,7 +51,7 @@ internal partial class EcbExchangeRateProvider : IExchangeRateProvider
             baseDate = ect.AddDays(1);
         }
 
-        DateTimeOffset result = new(baseDate.Year, baseDate.Month, baseDate.Day, CutoffTime.Hours, CutoffTime.Minutes, CutoffTime.Seconds, ectZone.BaseUtcOffset);
+        DateTimeOffset result = new(baseDate.Year, baseDate.Month, baseDate.Day, _cutoffTime.Hours, _cutoffTime.Minutes, _cutoffTime.Seconds, ectZone.BaseUtcOffset);
 
         return result;
     }
@@ -100,10 +101,5 @@ internal partial class EcbExchangeRateProvider : IExchangeRateProvider
         nsManager.AddNamespace("gesmes", "http://www.gesmes.org/xml/2002-08-01");
         nsManager.AddNamespace("ecb", "http://www.ecb.int/vocabulary/2002-08-01/eurofxref");
         return nsManager;
-    }
-
-    public void Dispose()
-    {
-        _cache.Dispose();
     }
 }
